@@ -51,6 +51,8 @@
 #include "cross.h"
 #include "control.h"
 
+#include "../../scalerconfig.h"
+
 #define MAPPERFILE "mapper-" VERSION ".map"
 //#define DISABLE_JOYSTICK
 
@@ -443,7 +445,7 @@ dosurface:
 				if (sdl.surface == NULL) E_Exit("Could not set fullscreen video mode %ix%i-%i: %s",sdl.desktop.full.width,sdl.desktop.full.height,bpp,SDL_GetError());
 			} else {
 				sdl.clip.x=0;sdl.clip.y=0;
-				sdl.surface=SDL_SetVideoMode(width*3,height*3,bpp,
+				sdl.surface=SDL_SetVideoMode(width*WIDTH_SCALE,height*HEIGHT_SCALE,bpp,
 					SDL_FULLSCREEN | ((flags & GFX_CAN_RANDOM) ? SDL_SWSURFACE : SDL_HWSURFACE) |
 					(sdl.desktop.doublebuf ? SDL_DOUBLEBUF|SDL_ASYNCBLIT  : 0)|SDL_HWPALETTE);
 				if (sdl.surface == NULL)
@@ -451,7 +453,7 @@ dosurface:
 			}
 		} else {
 			sdl.clip.x=0;sdl.clip.y=0;
-			sdl.surface=SDL_SetVideoMode(width*3,height*3,bpp,(flags & GFX_CAN_RANDOM) ? SDL_SWSURFACE : SDL_HWSURFACE);
+			sdl.surface=SDL_SetVideoMode(width*WIDTH_SCALE,height*HEIGHT_SCALE,bpp,(flags & GFX_CAN_RANDOM) ? SDL_SWSURFACE : SDL_HWSURFACE);
 #ifdef WIN32
 			if (sdl.surface == NULL) {
 				SDL_QuitSubSystem(SDL_INIT_VIDEO);
@@ -747,9 +749,11 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 
 
 void GFX_EndUpdate( const Bit16u *changedLines ) {
-	int x,y,x3,y3,w,h;
+#if defined(JSCALE) || defined(ASCALE)
+	int x,y,x3,y3,w,h,y5,x6;
 	Uint32 c;
 	unsigned char *stored;
+#endif
 #if (HAVE_DDRAW_H) && defined(WIN32)
 	int ret;
 #endif
@@ -771,7 +775,16 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 			LOG_MSG("SDL_Flip");
 			SDL_Flip(sdl.surface);
 		} else if (changedLines) {
-			/*Bitu y = 0, index = 0, rectCount = 0;
+#if defined(JSCALE) || defined(ASCALE)
+			// When doing scaling in this function, the whole screen is always updated
+			Bitu rectCount = 1;
+			SDL_Rect *rect = &sdl.updateRects[0];
+			rect->x = 0;
+			rect->y = 0;
+			rect->w = sdl.surface->w;
+			rect->h = sdl.surface->h;
+#else
+			Bitu y = 0, index = 0, rectCount = 0;
 			while (y < sdl.draw.height) {
 				if (!(index & 1)) {
 					y += changedLines[index];
@@ -789,47 +802,76 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 					y += changedLines[index];
 				}
 				index++;
-			}*/
+			}
+#endif
 
-			Bitu rectCount = 1;
-			SDL_Rect *rect = &sdl.updateRects[0];
-			rect->x = 0;
-			rect->y = 0;
-			rect->w = sdl.surface->w;
-			rect->h = sdl.surface->h;
-			LOG_MSG("rectCount=%i",rectCount);
-
+#ifdef JSCALE
+			// Scale top left portion of the surface by 3x emulating scanlines
 			w = sdl.surface->w;
 			h = sdl.surface->h;
 			stored = (unsigned char*)malloc(w*h*4);
 			memcpy(stored, sdl.surface->pixels, w*h*4);
-			for(int y=sdl.surface->h/3-1; y>=0; y--)
+			for(y=sdl.surface->h/3-1; y>=0; y--)
 			{
-				for(int x=w/3-1; x>=0; x--)
+				for(x=w/3-1; x>=0; x--)
 				{
 					c = ((Uint32*)sdl.surface->pixels)[(y*w)+x];
 					y3 = y*3;
 					x3 = x*3;
 
-					((Uint32*)sdl.surface->pixels)[(y3*w)+x3] = c;
+					((Uint32*)sdl.surface->pixels)[(y3*w)+x3  ] = c;
 					((Uint32*)sdl.surface->pixels)[(y3*w)+x3+1] = c;
 					((Uint32*)sdl.surface->pixels)[(y3*w)+x3+2] = c;
 
-					((Uint32*)sdl.surface->pixels)[((y3+1)*w)+x3] = c;
+					((Uint32*)sdl.surface->pixels)[((y3+1)*w)+x3  ] = c;
 					((Uint32*)sdl.surface->pixels)[((y3+1)*w)+x3+1] = c;
 					((Uint32*)sdl.surface->pixels)[((y3+1)*w)+x3+2] = c;
 
-					((Uint32*)sdl.surface->pixels)[((y3+2)*w)+x3] = 0;
+					((Uint32*)sdl.surface->pixels)[((y3+2)*w)+x3  ] = 0;
 					((Uint32*)sdl.surface->pixels)[((y3+2)*w)+x3+1] = 0;
 					((Uint32*)sdl.surface->pixels)[((y3+2)*w)+x3+2] = 0;
 				}
 			}
+#elif defined(ASCALE)
+			// Scale top left portion of the surface by 6x,5x emulating RGB subpixels and scanlines
+			w = sdl.surface->w;
+			h = sdl.surface->h;
+			stored = (unsigned char*)malloc(w*h*4);
+			memcpy(stored, sdl.surface->pixels, w*h*4);
+			for(y=sdl.surface->h/5-1; y>=0; y--)
+			{
+				for(x=w/6-1; x>=0; x--)
+				{
+					c = ((Uint32*)sdl.surface->pixels)[(y*w)+x];
+					y5 = y*5;
+					x6 = x*6;
+
+					for(j=0;j<4;j++)
+					{
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6  ] = c & 0xff000000;
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+1] = c & 0x00ff0000;
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+2] = c & 0x0000ff00;
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+3] = c & 0xff000000;
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+4] = c & 0x00ff0000;
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+5] = c & 0x0000ff00;
+					}
+
+					((Uint32*)sdl.surface->pixels)[((y5+4)*w)+x6  ] = 0;
+					((Uint32*)sdl.surface->pixels)[((y5+4)*w)+x6+1] = 0;
+					((Uint32*)sdl.surface->pixels)[((y5+4)*w)+x6+2] = 0;
+					((Uint32*)sdl.surface->pixels)[((y5+4)*w)+x6+3] = 0;
+					((Uint32*)sdl.surface->pixels)[((y5+4)*w)+x6+4] = 0;
+					((Uint32*)sdl.surface->pixels)[((y5+4)*w)+x6+5] = 0;
+				}
+			}
+#endif
 
 			if (rectCount)
 				SDL_UpdateRects( sdl.surface, rectCount, sdl.updateRects );
-
+#if defined(JSCALE) || defined(ASCALE)
 			memcpy(sdl.surface->pixels, stored, w*h*4);
 			free(stored);
+#endif
 		}
 		break;
 #if (HAVE_DDRAW_H) && defined(WIN32)
