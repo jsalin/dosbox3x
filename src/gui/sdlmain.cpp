@@ -439,15 +439,15 @@ dosurface:
 		sdl.clip.h=height;
 		if (sdl.desktop.fullscreen) {
 			if (sdl.desktop.full.fixed) {
-				sdl.clip.x=(Sint16)((sdl.desktop.full.width-width)/2);
-				sdl.clip.y=(Sint16)((sdl.desktop.full.height-height)/2);
+				sdl.clip.x=(Sint16)(((sdl.desktop.full.width/WIDTH_SCALE)-width)/2);
+				sdl.clip.y=(Sint16)(((sdl.desktop.full.height/HEIGHT_SCALE)-height)/2);
 				sdl.surface=SDL_SetVideoMode(sdl.desktop.full.width,sdl.desktop.full.height,bpp,
 					SDL_FULLSCREEN | ((flags & GFX_CAN_RANDOM) ? SDL_SWSURFACE : SDL_HWSURFACE) |
 					(sdl.desktop.doublebuf ? SDL_DOUBLEBUF|SDL_ASYNCBLIT : 0) | SDL_HWPALETTE);
 				if (sdl.surface == NULL) E_Exit("Could not set fullscreen video mode %ix%i-%i: %s",sdl.desktop.full.width,sdl.desktop.full.height,bpp,SDL_GetError());
 			} else {
 				sdl.clip.x=0;sdl.clip.y=0;
-				sdl.surface=SDL_SetVideoMode(width*WIDTH_SCALE,height*HEIGHT_SCALE,bpp,
+				sdl.surface=SDL_SetVideoMode(width,height,bpp,
 					SDL_FULLSCREEN | ((flags & GFX_CAN_RANDOM) ? SDL_SWSURFACE : SDL_HWSURFACE) |
 					(sdl.desktop.doublebuf ? SDL_DOUBLEBUF|SDL_ASYNCBLIT  : 0)|SDL_HWPALETTE);
 				if (sdl.surface == NULL)
@@ -768,13 +768,11 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 		if (SDL_MUSTLOCK(sdl.surface)) {
 			if (sdl.blit.surface) {
 				SDL_UnlockSurface(sdl.blit.surface);
-				LOG_MSG("blit, size: %ix%ix%i\n", sdl.blit.surface->w, sdl.blit.surface->h, sdl.blit.surface->pitch / sdl.blit.surface->w);
 				int Blit = SDL_BlitSurface( sdl.blit.surface, 0, sdl.surface, &sdl.clip );
 				LOG(LOG_MISC,LOG_WARN)("BlitSurface returned %d",Blit);
 			} else {
 				SDL_UnlockSurface(sdl.surface);
 			}
-			LOG_MSG("SDL_Flip");
 			SDL_Flip(sdl.surface);
 		} else if (changedLines) {
 #if defined(JSCALE) || defined(ASCALE)
