@@ -14,6 +14,8 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ *
+ *  Contains experimental scalers (C) 2016 Jussi Salin under GPLv2.
  */
 
 /* $Id: sdlmain.cpp,v 1.154 2009-06-01 10:25:51 qbix79 Exp $ */
@@ -750,7 +752,7 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 
 void GFX_EndUpdate( const Bit16u *changedLines ) {
 #if defined(JSCALE) || defined(ASCALE)
-	int x,y,x3,y3,w,h,y5,x6;
+	int x,y,x3,y3,w,h,y5,x6,j;
 	Uint32 c;
 	unsigned char *stored;
 #endif
@@ -848,12 +850,12 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 
 					for(j=0;j<4;j++)
 					{
-						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6  ] = c & 0xff000000;
-						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+1] = c & 0x00ff0000;
-						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+2] = c & 0x0000ff00;
-						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+3] = c & 0xff000000;
-						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+4] = c & 0x00ff0000;
-						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+5] = c & 0x0000ff00;
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6  ] = c & 0x00ff0000;
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+1] = c & 0x0000ff00;
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+2] = c & 0x000000ff;
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+3] = c & 0x00ff0000;
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+4] = c & 0x0000ff00;
+						((Uint32*)sdl.surface->pixels)[((y5+j)*w)+x6+5] = c & 0x000000ff;
 					}
 
 					((Uint32*)sdl.surface->pixels)[((y5+4)*w)+x6  ] = 0;
