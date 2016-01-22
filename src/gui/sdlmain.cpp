@@ -443,7 +443,7 @@ dosurface:
 				if (sdl.surface == NULL) E_Exit("Could not set fullscreen video mode %ix%i-%i: %s",sdl.desktop.full.width,sdl.desktop.full.height,bpp,SDL_GetError());
 			} else {
 				sdl.clip.x=0;sdl.clip.y=0;
-				sdl.surface=SDL_SetVideoMode(width,height,bpp,
+				sdl.surface=SDL_SetVideoMode(width*3,height*3,bpp,
 					SDL_FULLSCREEN | ((flags & GFX_CAN_RANDOM) ? SDL_SWSURFACE : SDL_HWSURFACE) |
 					(sdl.desktop.doublebuf ? SDL_DOUBLEBUF|SDL_ASYNCBLIT  : 0)|SDL_HWPALETTE);
 				if (sdl.surface == NULL)
@@ -451,7 +451,7 @@ dosurface:
 			}
 		} else {
 			sdl.clip.x=0;sdl.clip.y=0;
-			sdl.surface=SDL_SetVideoMode(width,height,bpp,(flags & GFX_CAN_RANDOM) ? SDL_SWSURFACE : SDL_HWSURFACE);
+			sdl.surface=SDL_SetVideoMode(width*3,height*3,bpp,(flags & GFX_CAN_RANDOM) ? SDL_SWSURFACE : SDL_HWSURFACE);
 #ifdef WIN32
 			if (sdl.surface == NULL) {
 				SDL_QuitSubSystem(SDL_INIT_VIDEO);
@@ -747,9 +747,13 @@ bool GFX_StartUpdate(Bit8u * & pixels,Bitu & pitch) {
 
 
 void GFX_EndUpdate( const Bit16u *changedLines ) {
+	int x,y,x3,y3,w,h;
+	Uint32 c;
+	unsigned char *stored;
 #if (HAVE_DDRAW_H) && defined(WIN32)
 	int ret;
 #endif
+    LOG_MSG("GFX_EndUpdate, sdl.updating=%i, sdl.desktop.type=%i, pitch=%i", sdl.updating, sdl.desktop.type, sdl.surface->pitch);
 	if (!sdl.updating)
 		return;
 	sdl.updating=false;
@@ -758,14 +762,16 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 		if (SDL_MUSTLOCK(sdl.surface)) {
 			if (sdl.blit.surface) {
 				SDL_UnlockSurface(sdl.blit.surface);
+				LOG_MSG("blit, size: %ix%ix%i\n", sdl.blit.surface->w, sdl.blit.surface->h, sdl.blit.surface->pitch / sdl.blit.surface->w);
 				int Blit = SDL_BlitSurface( sdl.blit.surface, 0, sdl.surface, &sdl.clip );
 				LOG(LOG_MISC,LOG_WARN)("BlitSurface returned %d",Blit);
 			} else {
 				SDL_UnlockSurface(sdl.surface);
 			}
+			LOG_MSG("SDL_Flip");
 			SDL_Flip(sdl.surface);
 		} else if (changedLines) {
-			Bitu y = 0, index = 0, rectCount = 0;
+			/*Bitu y = 0, index = 0, rectCount = 0;
 			while (y < sdl.draw.height) {
 				if (!(index & 1)) {
 					y += changedLines[index];
@@ -783,9 +789,47 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
 					y += changedLines[index];
 				}
 				index++;
+			}*/
+
+			Bitu rectCount = 1;
+			SDL_Rect *rect = &sdl.updateRects[0];
+			rect->x = 0;
+			rect->y = 0;
+			rect->w = sdl.surface->w;
+			rect->h = sdl.surface->h;
+			LOG_MSG("rectCount=%i",rectCount);
+
+			w = sdl.surface->w;
+			h = sdl.surface->h;
+			stored = (unsigned char*)malloc(w*h*4);
+			memcpy(stored, sdl.surface->pixels, w*h*4);
+			for(int y=sdl.surface->h/3-1; y>=0; y--)
+			{
+				for(int x=w/3-1; x>=0; x--)
+				{
+					c = ((Uint32*)sdl.surface->pixels)[(y*w)+x];
+					y3 = y*3;
+					x3 = x*3;
+
+					((Uint32*)sdl.surface->pixels)[(y3*w)+x3] = c;
+					((Uint32*)sdl.surface->pixels)[(y3*w)+x3+1] = c;
+					((Uint32*)sdl.surface->pixels)[(y3*w)+x3+2] = c;
+
+					((Uint32*)sdl.surface->pixels)[((y3+1)*w)+x3] = c;
+					((Uint32*)sdl.surface->pixels)[((y3+1)*w)+x3+1] = c;
+					((Uint32*)sdl.surface->pixels)[((y3+1)*w)+x3+2] = c;
+
+					((Uint32*)sdl.surface->pixels)[((y3+2)*w)+x3] = 0;
+					((Uint32*)sdl.surface->pixels)[((y3+2)*w)+x3+1] = 0;
+					((Uint32*)sdl.surface->pixels)[((y3+2)*w)+x3+2] = 0;
+				}
 			}
+
 			if (rectCount)
 				SDL_UpdateRects( sdl.surface, rectCount, sdl.updateRects );
+
+			memcpy(sdl.surface->pixels, stored, w*h*4);
+			free(stored);
 		}
 		break;
 #if (HAVE_DDRAW_H) && defined(WIN32)
